@@ -1,16 +1,12 @@
 services:
-  - name: create-host-gotty
-    type: web_service
+  - type: web
+    name: my-docker-web-service
     env: docker
-    plan: free
-    dockerfilePath: Dockerfile
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    buildCommand: ""
+    startCommand: ""
+    autoDeploy: true
     envVars:
-      - key: GOTTY_PASSWORD
-        value: "REPLACE_WITH_STRONG_admin:REPLACE_PASS"
-      - key: GOTTY_AUTH
-        value: "basic"
-      - key: GOTTY_PORT
-        value: "8080"
-      - key: SHELL
-        value: "/bin/bash"
-    region: oregon
+      - key: NODE_ENV
+        value: production
