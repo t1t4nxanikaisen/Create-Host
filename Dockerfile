@@ -21,10 +21,15 @@ ENV GOTTY_CORS="*"
 
 # Install gotty prebuilt binary
 RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends wget ca-certificates; \
     wget -O /tmp/gotty.tar.gz https://github.com/go-gotty/gotty/releases/latest/download/gotty_linux_amd64.tar.gz; \
     tar -xzf /tmp/gotty.tar.gz -C /usr/local/bin; \
     chmod +x /usr/local/bin/gotty; \
-    rm /tmp/gotty.tar.gz
+    rm /tmp/gotty.tar.gz; \
+    apt-get remove -y wget; \
+    apt-get autoremove -y; \
+    rm -rf /var/lib/apt/lists/*
 
 # Build gotty from maintained fork (go-gotty) via go install with proxy
 ENV GOPROXY=https://proxy.golang.org,direct
