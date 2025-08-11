@@ -1,42 +1,48 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Defaults (from Dockerfile envs)
+# run_gotty.sh - start gotty with secure defaults
 PORT="${GOTTY_PORT:-8080}"
 SHELL_CMD="${SHELL:-/bin/bash}"
-AUTH="${GOTTY_AUTH:-password}"    # none | basic | password
-PASSWORD="${GOTTY_PASSWORD:-changeme}"
+AUTH="${GOTTY_AUTH:-basic}"
+PASSWORD="${GOTTY_PASSWORD:-}"
 TITLE="${GOTTY_TITLE:-VPS}"
 CORS="${GOTTY_CORS:-*}"
 
-# Minimal validation
-if [[ "$AUTH" == "password" && -z "$PASSWORD" ]]; then
-  echo "Error: GOTTY_PASSWORD must be set when GOTTY_AUTH=password" >&2
+# Ensure user dotfiles exist and run neofetch on new shell
+if [ ! -f "$HOME/.bashrc" ]; then
+  /usr/local/bin/default_bashrc.sh "$HOME"
+fi
+
+# Validate auth
+if [ "$AUTH" = "basic" ] && [ -z "$PASSWORD" ]; then
+  echo "GOTTY_AUTH=basic requires GOTTY_PASSWORD to be set to 'user:pass'" >&2
   exit 1
 fi
 
-# Construct gotty args
-GOTTY_ARGS=( 
-  "--port" "$PORT"
-  "--title-format" "$TITLE"
-  "--permit-write"         # allow input to terminal
-  "--idle-timeout" "0"     # never timeout
-  "--cors" "$CORS"
+GOTTY_ARGS=(
+  --port "$PORT"
+  --title-format "$TITLE"
+  --permit-write
+  --idle-timeout 0
+  --cors "$CORS"
 )
 
-if [[ "$AUTH" == "basic" ]]; then
-  # basic expects "user:pass"
-  # ensure the value is provided in GOTTY_PASSWORD env as "user:pass"
-  GOTTY_ARGS+=("--credential" "${PASSWORD}")
-elif [[ "$AUTH" == "password" ]]; then
-  GOTTY_ARGS+=("--password" "${PASSWORD}")
-elif [[ "$AUTH" == "none" ]]; then
-  # no auth
-  :
-else
-  echo "Unsupported GOTTY_AUTH value: $AUTH" >&2
-  exit 1
-fi
+case "$AUTH" in
+  basic)
+    GOTTY_ARGS+=(--credential "$PASSWORD")
+    ;;
+  password)
+    GOTTY_ARGS+=(--password "$PASSWORD")
+    ;;
+  none)
+    # no creds
+    ;;
+  *)
+    echo "Unsupported GOTTY_AUTH: $AUTH" >&2
+    exit 1
+    ;;
+esac
 
-# Exec gotty with the chosen shell
-exec gotty "${GOTTY_ARGS[@]}" "${SHELL_CMD}"
+echo "Starting gotty on :${PORT} (auth=${AUTH})"
+exec gotty "${GOTTY_ARGS[@]}" "$SHELL_CMD"
