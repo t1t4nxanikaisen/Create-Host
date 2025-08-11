@@ -19,16 +19,12 @@ ENV GOTTY_PASSWORD=admin:changeme
 ENV GOTTY_TITLE="VPS"
 ENV GOTTY_CORS="*"
 
-# Install required packages: build tools for gotty, utilities
+# Install gotty prebuilt binary
 RUN set -eux; \
-    apt-get update; \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      ca-certificates wget curl gnupg2 build-essential git golang-go sudo procps less \
-      neofetch htop locales xz-utils fish iproute2 iputils-ping dnsutils net-tools \
-      apt-transport-https; \
-    rm -rf /var/lib/apt/lists/*; \
-    # Set locale (optional)
-    echo "en_US.UTF-8 UTF-8" > /etc/locale.gen; locale-gen en_US.UTF-8
+    wget -O /tmp/gotty.tar.gz https://github.com/go-gotty/gotty/releases/latest/download/gotty_linux_amd64.tar.gz; \
+    tar -xzf /tmp/gotty.tar.gz -C /usr/local/bin; \
+    chmod +x /usr/local/bin/gotty; \
+    rm /tmp/gotty.tar.gz
 
 # Build gotty from maintained fork (go-gotty) via go install with proxy
 ENV GOPROXY=https://proxy.golang.org,direct
