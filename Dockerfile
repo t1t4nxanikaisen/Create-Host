@@ -1,55 +1,67 @@
-# Use a slim Debian base
+# Dockerfile - Create-Host (Render-ready)
+# Base image
 FROM debian:12-slim
 
-# Install packages (gotty + bash + sudo + curl)
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    ca-certificates \
-    sudo \
-    wget \
-    curl \
-    git \
-    procps \
-    && rm -rf /var/lib/apt/lists/*
+# Metadata
+LABEL maintainer="create-host <you@example.com>"
 
-# Install gotty (latest releases may change — pinned to a reliable binary)
-ENV GOTTY_VERSION 1.0.1
-
-RUN set -eux; \
-    ARCH=$(dpkg --print-architecture); \
-    case "$ARCH" in \
-      amd64) GOTTY_ARCH=linux-amd64 ;; \
-      arm64) GOTTY_ARCH=linux-arm64 ;; \
-      *) echo "unsupported arch $ARCH"; exit 1 ;; \
-    esac; \
-    wget -qO /tmp/gotty.tar.gz "https://github.com/yudai/gotty/releases/download/v${GOTTY_VERSION}/gotty_${GOTTY_VERSION}_${GOTTY_ARCH}.tar.gz"; \
-    tar -xzf /tmp/gotty.tar.gz -C /usr/local/bin gotty; \
-    chmod +x /usr/local/bin/gotty; \
-    rm -f /tmp/gotty.tar.gz
-
-# Create non-root user
-ARG USERNAME=user
+# Arguments / defaults
+ARG USERNAME=hostuser
 ARG UID=1000
-RUN useradd -m -u ${UID} -s /bin/bash ${USERNAME} && \
-    mkdir -p /home/${USERNAME}/workspace && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}
+ARG GOTTY_VERSION=2.0.0
 
-WORKDIR /home/${USERNAME}/workspace
-
-# Copy start script
-COPY run_gotty.sh /usr/local/bin/run_gotty.sh
-RUN chmod +x /usr/local/bin/run_gotty.sh
-
-# Expose http port used by gotty
-EXPOSE 8080
-
-# Default envs (can be overridden in Render dashboard or render.yaml)
+# Default envs (override in Render env or render.yaml)
 ENV GOTTY_PORT=8080
 ENV SHELL=/bin/bash
-ENV GOTTY_AUTH=password
-ENV GOTTY_PASSWORD=changeme
+ENV GOTTY_AUTH=basic
+# IMPORTANT: override this in Render env (use Render dashboard secrets)
+ENV GOTTY_PASSWORD=admin:changeme
 ENV GOTTY_TITLE="VPS"
 ENV GOTTY_CORS="*"
 
-# Start gotty as non-root user
+# Install required packages: build tools for gotty, utilities
+RUN set -eux; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      ca-certificates wget curl gnupg2 build-essential git golang-go sudo procps less \
+      neofetch htop locales xz-utils fish iproute2 iputils-ping dnsutils net-tools \
+      apt-transport-https; \
+    rm -rf /var/lib/apt/lists/*; \
+    # Set locale (optional)
+    echo "en_US.UTF-8 UTF-8" > /etc/locale.gen; locale-gen en_US.UTF-8
+
+# Build gotty from maintained fork (go-gotty)
+RUN set -eux; \
+    git clone --depth 1 https://github.com/go-gotty/gotty.git /tmp/gotty-src; \
+    cd /tmp/gotty-src; \
+    go build -o /usr/local/bin/gotty ./cmd/gotty; \
+    chmod +x /usr/local/bin/gotty; \
+    rm -rf /tmp/gotty-src
+
+# Create non-root user
+RUN set -eux; \
+    groupadd -g ${UID} ${USERNAME} || true; \
+    useradd -m -u ${UID} -s /bin/bash ${USERNAME} || true; \
+    mkdir -p /home/${USERNAME}/workspace; \
+    chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}
+
+WORKDIR /home/${USERNAME}/workspace
+
+# Copy entrypoint
+COPY run_gotty.sh /usr/local/bin/run_gotty.sh
+RUN chmod +x /usr/local/bin/run_gotty.sh
+
+# Provide a small helper to create user-owned files at runtime
+COPY default_bashrc.sh /usr/local/bin/default_bashrc.sh
+RUN chmod +x /usr/local/bin/default_bashrc.sh
+
+# Expose port
+EXPOSE 8080
+
+# Drop to non-root
 USER ${USERNAME}
 
+# Entrypoint
 ENTRYPOINT ["/usr/local/bin/run_gotty.sh"]
+
+# Default command is provided by run_gotty.sh
