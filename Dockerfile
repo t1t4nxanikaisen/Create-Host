@@ -30,13 +30,12 @@ RUN set -eux; \
     # Set locale (optional)
     echo "en_US.UTF-8 UTF-8" > /etc/locale.gen; locale-gen en_US.UTF-8
 
-# Build gotty from maintained fork (go-gotty)
+# Build gotty from maintained fork (go-gotty) via go install
 RUN set -eux; \
-    git clone --depth 1 https://github.com/go-gotty/gotty.git /tmp/gotty-src; \
-    cd /tmp/gotty-src; \
-    go build -o /usr/local/bin/gotty ./cmd/gotty; \
-    chmod +x /usr/local/bin/gotty; \
-    rm -rf /tmp/gotty-src
+    go install github.com/go-gotty/gotty/cmd/gotty@latest; \
+    mv /root/go/bin/gotty /usr/local/bin/gotty; \
+    chmod +x /usr/local/bin/gotty
+
 
 # Create non-root user
 RUN set -eux; \
