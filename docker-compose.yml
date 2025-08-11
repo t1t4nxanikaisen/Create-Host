@@ -1,8 +1,12 @@
-my-gotty:
-  hostname: mygotty
-  ports:
-  - 8989:8080
-  tty: true
-  image: modenaf360/gotty:latest
-  stdin_open: true
-  tty: true                     #using bash TTY mode (pseudo-TTY)
+version: '3.8'
+services:
+  create-host:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      GOTTY_AUTH: basic
+      GOTTY_PASSWORD: "admin:changeme"
+      GOTTY_PORT: "8080"
+      GOTTY_TITLE: "VPS"
+    restart: unless-stopped
