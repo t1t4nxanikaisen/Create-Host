@@ -30,11 +30,13 @@ RUN set -eux; \
     # Set locale (optional)
     echo "en_US.UTF-8 UTF-8" > /etc/locale.gen; locale-gen en_US.UTF-8
 
-# Build gotty from maintained fork (go-gotty) via go install
+# Build gotty from maintained fork (go-gotty) via go install with proxy
+ENV GOPROXY=https://proxy.golang.org,direct
 RUN set -eux; \
     go install github.com/go-gotty/gotty/cmd/gotty@latest; \
     mv /root/go/bin/gotty /usr/local/bin/gotty; \
     chmod +x /usr/local/bin/gotty
+
 
 
 # Create non-root user
