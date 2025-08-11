@@ -1,23 +1,55 @@
-FROM ubuntu:24.10
-LABEL maintainer="wingnut0310 <wingnut0310@gmail.com>"
+# Use a slim Debian base
+FROM debian:12-slim
 
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US:en
-ENV GOTTY_TAG_VER v1.0.1
+# Install packages (gotty + bash + sudo + curl)
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    ca-certificates \
+    sudo \
+    wget \
+    curl \
+    git \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get -y update && \
-    apt-get install -y curl && \
-    curl -sLk https://cdimage.ubuntu.com/ubuntu-base/releases/24.10/release/ubuntu-base-24.10-base-amd64.tar.gz\
-    | tar xzC /usr/local/bin && \
-    apt-get purge --auto-remove -y curl && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists*
+# Install gotty (latest releases may change — pinned to a reliable binary)
+ENV GOTTY_VERSION 1.0.1
 
+RUN set -eux; \
+    ARCH=$(dpkg --print-architecture); \
+    case "$ARCH" in \
+      amd64) GOTTY_ARCH=linux-amd64 ;; \
+      arm64) GOTTY_ARCH=linux-arm64 ;; \
+      *) echo "unsupported arch $ARCH"; exit 1 ;; \
+    esac; \
+    wget -qO /tmp/gotty.tar.gz "https://github.com/yudai/gotty/releases/download/v${GOTTY_VERSION}/gotty_${GOTTY_VERSION}_${GOTTY_ARCH}.tar.gz"; \
+    tar -xzf /tmp/gotty.tar.gz -C /usr/local/bin gotty; \
+    chmod +x /usr/local/bin/gotty; \
+    rm -f /tmp/gotty.tar.gz
 
-COPY /run_gotty.sh /run_gotty.sh
+# Create non-root user
+ARG USERNAME=user
+ARG UID=1000
+RUN useradd -m -u ${UID} -s /bin/bash ${USERNAME} && \
+    mkdir -p /home/${USERNAME}/workspace && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}
 
-RUN chmod 744 /run_gotty.sh
+WORKDIR /home/${USERNAME}/workspace
 
+# Copy start script
+COPY run_gotty.sh /usr/local/bin/run_gotty.sh
+RUN chmod +x /usr/local/bin/run_gotty.sh
+
+# Expose http port used by gotty
 EXPOSE 8080
 
-CMD ["/bin/bash","/run_gotty.sh"]
+# Default envs (can be overridden in Render dashboard or render.yaml)
+ENV GOTTY_PORT=8080
+ENV SHELL=/bin/bash
+ENV GOTTY_AUTH=password
+ENV GOTTY_PASSWORD=changeme   # IMPORTANT: override this in Render env
+ENV GOTTY_TITLE="VPS"
+ENV GOTTY_CORS="*"
+
+# Start gotty as non-root user
+USER ${USERNAME}
+
+ENTRYPOINT ["/usr/local/bin/run_gotty.sh"]
