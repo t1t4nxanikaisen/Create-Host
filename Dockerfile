@@ -1,69 +1,52 @@
-# Dockerfile - Create-Host (Render-ready)
-# Base image
+# Use Debian 12 slim base image
 FROM debian:12-slim
 
-# Metadata
-LABEL maintainer="create-host <you@example.com>"
+# Set environment variables to avoid prompts during install
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Arguments / defaults
-ARG USERNAME=hostuser
-ARG UID=1000
-ARG GOTTY_VERSION=2.0.0
-
-# Default envs (override in Render env or render.yaml)
-ENV GOTTY_PORT=8080
-ENV SHELL=/bin/bash
-ENV GOTTY_AUTH=basic
-# IMPORTANT: override this in Render env (use Render dashboard secrets)
-ENV GOTTY_PASSWORD=admin:changeme
-ENV GOTTY_TITLE="VPS"
-ENV GOTTY_CORS="*"
-
-# Install gotty prebuilt binary
+# Install required tools and dependencies in one go
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends wget ca-certificates; \
-    wget -O /tmp/gotty.tar.gz https://github.com/go-gotty/gotty/releases/latest/download/gotty_linux_amd64.tar.gz; \
-    tar -xzf /tmp/gotty.tar.gz -C /usr/local/bin; \
+    apt-get install -y --no-install-recommends \
+        wget \
+        curl \
+        ca-certificates \
+        fish \
+        neofetch \
+        sudo \
+        procps \
+        iproute2 \
+        net-tools \
+        vim \
+        less \
+        gnupg2 \
+        locales; \
+    rm -rf /var/lib/apt/lists/*; \
+    \
+    # Setup locale (optional but useful for UTF-8 support)
+    echo "en_US.UTF-8 UTF-8" > /etc/locale.gen; \
+    locale-gen en_US.UTF-8; \
+    update-locale LANG=en_US.UTF-8; \
+    \
+    # Add fish as default shell for root
+    chsh -s /usr/bin/fish root
+
+# Install gotty binary properly:  
+# 1. We fetch the latest release info from GitHub API, parse URL, download, and install.
+RUN set -eux; \
+    GOTTY_LATEST_URL=$(curl -s https://api.github.com/repos/sorenisanerd/gotty/releases/latest \
+        | grep browser_download_url \
+        | grep linux_amd64.tar.gz \
+        | cut -d '"' -f 4); \
+    echo "Downloading gotty from $GOTTY_LATEST_URL"; \
+    wget -O /tmp/gotty.tar.gz "$GOTTY_LATEST_URL"; \
+    tar -xzf /tmp/gotty.tar.gz -C /tmp; \
+    mv /tmp/gotty /usr/local/bin/gotty; \
     chmod +x /usr/local/bin/gotty; \
-    rm /tmp/gotty.tar.gz; \
-    apt-get remove -y wget; \
-    apt-get autoremove -y; \
-    rm -rf /var/lib/apt/lists/*
+    rm /tmp/gotty.tar.gz
 
-# Build gotty from maintained fork (go-gotty) via go install with proxy
-ENV GOPROXY=https://proxy.golang.org,direct
-RUN set -eux; \
-    go install github.com/go-gotty/gotty/cmd/gotty@latest; \
-    mv /root/go/bin/gotty /usr/local/bin/gotty; \
-    chmod +x /usr/local/bin/gotty
-
-
-
-# Create non-root user
-RUN set -eux; \
-    groupadd -g ${UID} ${USERNAME} || true; \
-    useradd -m -u ${UID} -s /bin/bash ${USERNAME} || true; \
-    mkdir -p /home/${USERNAME}/workspace; \
-    chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}
-
-WORKDIR /home/${USERNAME}/workspace
-
-# Copy entrypoint
-COPY run_gotty.sh /usr/local/bin/run_gotty.sh
-RUN chmod +x /usr/local/bin/run_gotty.sh
-
-# Provide a small helper to create user-owned files at runtime
-COPY default_bashrc.sh /usr/local/bin/default_bashrc.sh
-RUN chmod +x /usr/local/bin/default_bashrc.sh
-
-# Expose port
+# Expose port 8080 for gotty
 EXPOSE 8080
 
-# Drop to non-root
-USER ${USERNAME}
-
-# Entrypoint
-ENTRYPOINT ["/usr/local/bin/run_gotty.sh"]
-
-# Default command is provided by run_gotty.sh
+# Entrypoint script that starts gotty with fish shell for root (adjust as needed)
+CMD ["gotty", "-w", "-p", "8080", "fish"]
