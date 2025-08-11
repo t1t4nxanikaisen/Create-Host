@@ -1,0 +1,16 @@
+services:
+  - name: create-host-gotty
+    type: web_service
+    env: docker
+    plan: free
+    dockerfilePath: Dockerfile
+    envVars:
+      - key: GOTTY_PASSWORD
+        value: "REPLACE_WITH_STRONG_admin:REPLACE_PASS"
+      - key: GOTTY_AUTH
+        value: "basic"
+      - key: GOTTY_PORT
+        value: "8080"
+      - key: SHELL
+        value: "/bin/bash"
+    region: oregon
